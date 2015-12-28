@@ -65,6 +65,7 @@ LOCAL_SRC_FILES := \
 	Sensor.cpp \
 	SensorEventQueue.cpp \
 	SensorManager.cpp \
+	SensorManagerCompat.cpp \
 	StreamSplitter.cpp \
 	Surface.cpp \
 	SurfaceControl.cpp \
