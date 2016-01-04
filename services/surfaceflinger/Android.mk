@@ -120,6 +120,7 @@ ifeq ($(TARGET_USES_QCOM_BSP), true)
     LOCAL_C_INCLUDES += $(call project-path-for,qcom-display)/libqdutils
     LOCAL_SHARED_LIBRARIES += libqdutils
     LOCAL_CFLAGS += -DQTI_BSP
+endif
 
 ifeq ($(BOARD_USES_SAMSUNG_HDMI),true)
         LOCAL_CFLAGS += -DSAMSUNG_HDMI_SUPPORT
