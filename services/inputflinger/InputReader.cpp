@@ -2131,6 +2131,10 @@ void KeyboardInputMapper::configure(nsecs_t when,
             mOrientation = DISPLAY_ORIENTATION_0;
         }
     }
+
+    if (!changes || (changes & InputReaderConfiguration::CHANGE_APP_SWITCH_BUTTONS)) {
+        mAppSwitchSwapButtons = config->appSwitchSwapButtonsEnabled;
+    }
 }
 
 void KeyboardInputMapper::configureParameters() {
@@ -2299,8 +2303,25 @@ void KeyboardInputMapper::processKey(nsecs_t when, bool down, int32_t scanCode,
 
     NotifyKeyArgs args(when, getDeviceId(), mSource, policyFlags,
             down ? AKEY_EVENT_ACTION_DOWN : AKEY_EVENT_ACTION_UP,
-            AKEY_EVENT_FLAG_FROM_SYSTEM, keyCode, scanCode, keyMetaState, downTime);
+            AKEY_EVENT_FLAG_FROM_SYSTEM, getAdjustedKeyCode(keyCode),
+            scanCode, keyMetaState, downTime);
     getListener()->notifyKey(&args);
+}
+
+int KeyboardInputMapper::getAdjustedKeyCode(int keyCode) {
+    switch (keyCode) {
+        case AKEYCODE_BACK:
+            if (mAppSwitchSwapButtons) {
+                return AKEYCODE_APP_SWITCH;
+            }
+            break;
+        case AKEYCODE_APP_SWITCH:
+            if (mAppSwitchSwapButtons) {
+                return AKEYCODE_BACK;
+            }
+            break;
+    }
+    return keyCode;
 }
 
 ssize_t KeyboardInputMapper::findKeyDown(int32_t scanCode) {
@@ -3006,6 +3027,8 @@ void TouchInputMapper::configureParameters() {
             mParameters.deviceType = Parameters::DEVICE_TYPE_TOUCH_NAVIGATION;
         } else if (deviceTypeString == "pointer") {
             mParameters.deviceType = Parameters::DEVICE_TYPE_POINTER;
+        } else if (deviceTypeString == "gesture") {
+            mParameters.deviceType = Parameters::DEVICE_TYPE_GESTURE_SENSOR;
         } else if (deviceTypeString != "default") {
             ALOGW("Invalid value for touch.deviceType: '%s'", deviceTypeString.string());
         }
@@ -3060,6 +3083,9 @@ void TouchInputMapper::dumpParameters(String8& dump) {
         break;
     case Parameters::DEVICE_TYPE_POINTER:
         dump.append(INDENT4 "DeviceType: pointer\n");
+        break;
+    case Parameters::DEVICE_TYPE_GESTURE_SENSOR:
+        dump.append(INDENT4 "DeviceType: gesture\n");
         break;
     default:
         ALOG_ASSERT(false);
@@ -3123,6 +3149,9 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
     } else if (mParameters.deviceType == Parameters::DEVICE_TYPE_TOUCH_NAVIGATION) {
         mSource = AINPUT_SOURCE_TOUCH_NAVIGATION;
         mDeviceMode = DEVICE_MODE_NAVIGATION;
+    } else if (mParameters.deviceType == Parameters::DEVICE_TYPE_GESTURE_SENSOR) {
+        mSource = AINPUT_SOURCE_GESTURE_SENSOR;
+        mDeviceMode = DEVICE_MODE_UNSCALED;
     } else {
         mSource = AINPUT_SOURCE_TOUCHPAD;
         mDeviceMode = DEVICE_MODE_UNSCALED;
