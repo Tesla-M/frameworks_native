@@ -1,3 +1,4 @@
+
 /*
  * Copyright (C) 2007 The Android Open Source Project
  *
@@ -79,6 +80,10 @@
 #include "RenderEngine/RenderEngine.h"
 #include <cutils/compiler.h>
 #include "DisplayUtils.h"
+
+#ifdef SAMSUNG_HDMI_SUPPORT
+#include "SecTVOutService.h"
+#endif
 
 #ifdef SAMSUNG_HDMI_SUPPORT
 #include "SecTVOutService.h"
@@ -1974,33 +1979,6 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     // swap buffers (presentation)
     hw->swapBuffers(getHwComposer());
 }
-
-#ifdef SWAP_BUFFERS_WORKAROUND
-int SurfaceFlinger::hasVisibleRegions() {
-    HWComposer& hwc(getHwComposer());
-    for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
-        sp<const DisplayDevice> hw(mDisplays[dpy]);
-        const int32_t id = hw->getHwcDisplayId();
-            if (id >= 0) {
-                const Vector< sp<Layer> >& currentLayers(
-                    hw->getVisibleLayersSortedByZ());
-                const size_t count = currentLayers.size();
-                HWComposer::LayerListIterator cur = hwc.begin(id);
-                const HWComposer::LayerListIterator end = hwc.end(id);
-                for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
-                    const sp<Layer>& layer(currentLayers[i]);
-                    const Layer::State& s(layer->getDrawingState());
-                    Rect bounds(s.transform.transform(layer->computeBounds()));
-                    Region visibleRegion;
-                    visibleRegion.set(bounds);
-                    if (!visibleRegion.isEmpty())
-                        return 1;
-                }
-            }
-    }
-    return 0;
-}
-#endif
 
 bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty)
 {
