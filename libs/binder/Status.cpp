@@ -91,7 +91,7 @@ void Status::setFromStatusT(status_t status) {
             mException = EX_NONE;
             mMessage.clear();
             break;
-        case UNEXPECTED_NULL:
+        case UNKNOWN_ERROR:
             mException = EX_NULL_POINTER;
             mMessage.setTo("Unexpected null reference in Parcel");
             break;
