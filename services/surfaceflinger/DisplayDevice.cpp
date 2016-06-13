@@ -88,21 +88,23 @@ DisplayDevice::DisplayDevice(
       mPowerMode(HWC_POWER_MODE_OFF),
       mActiveConfig(0)
 {
-    mNativeWindow = new Surface(producer, false);
+    Surface* surface;
+    mNativeWindow = surface = new Surface(producer, false);
     ANativeWindow* const window = mNativeWindow.get();
+    char property[PROPERTY_VALUE_MAX];
 
     /*
      * Create our display's surface
      */
 
-    EGLSurface surface;
+    EGLSurface eglSurface;
     EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (config == EGL_NO_CONFIG) {
         config = RenderEngine::chooseEglConfig(display, format);
     }
-    surface = eglCreateWindowSurface(display, config, window, NULL);
-    eglQuerySurface(display, surface, EGL_WIDTH,  &mDisplayWidth);
-    eglQuerySurface(display, surface, EGL_HEIGHT, &mDisplayHeight);
+    eglSurface = eglCreateWindowSurface(display, config, window, NULL);
+    eglQuerySurface(display, eglSurface, EGL_WIDTH,  &mDisplayWidth);
+    eglQuerySurface(display, eglSurface, EGL_HEIGHT, &mDisplayHeight);
 
     // Make sure that composition can never be stalled by a virtual display
     // consumer that isn't processing buffers fast enough. We have to do this
@@ -116,7 +118,7 @@ DisplayDevice::DisplayDevice(
 
     mConfig = config;
     mDisplay = display;
-    mSurface = surface;
+    mSurface = eglSurface;
     mFormat  = format;
     mPageFlipCount = 0;
     mViewport.makeInvalid();
@@ -140,8 +142,17 @@ DisplayDevice::DisplayDevice(
             break;
     }
 
+    mPanelInverseMounted = false;
+    // Check if panel is inverse mounted (contents show up HV flipped)
+    property_get("persist.panel.inversemounted", property, "0");
+    mPanelInverseMounted = !!atoi(property);
+
     // initialize the display orientation transform.
     setProjection(DisplayState::eOrientationDefault, mViewport, mFrame);
+
+#ifdef NUM_FRAMEBUFFER_SURFACE_BUFFERS
+    surface->allocateBuffers();
+#endif
 }
 
 DisplayDevice::~DisplayDevice() {
@@ -244,7 +255,21 @@ void DisplayDevice::swapBuffers(HWComposer& hwc) const {
     if (hwc.initCheck() != NO_ERROR ||
             (hwc.hasGlesComposition(mHwcDisplayId) &&
              (hwc.supportsFramebufferTarget() || mType >= DISPLAY_VIRTUAL))) {
-        EGLBoolean success = eglSwapBuffers(mDisplay, mSurface);
+        EGLBoolean success;
+#ifdef SWAP_BUFFERS_WORKAROUND
+        /* SwapBuffers on Exynos4 might block if called without
+         * any visible regions. This maybe a driver bug which
+         * needs to be investigated. As a workaround, check if
+         * atleast one layer has a visible region before attempting
+         * to call swapBuffers
+         */
+        if (hwc.initCheck() != NO_ERROR || lastCompositionHadVisibleLayers)
+            success = eglSwapBuffers(mDisplay, mSurface);
+        else
+            success = 1;
+#else
+        success = eglSwapBuffers(mDisplay, mSurface);
+#endif
         if (!success) {
             EGLint error = eglGetError();
             if (error == EGL_CONTEXT_LOST ||
@@ -386,6 +411,20 @@ status_t DisplayDevice::orientationToTransfrom(
         int orientation, int w, int h, Transform* tr)
 {
     uint32_t flags = 0;
+    char value[PROPERTY_VALUE_MAX];
+    property_get("ro.sf.hwrotation", value, "0");
+    int additionalRot = atoi(value);
+
+    if (additionalRot) {
+        additionalRot /= 90;
+        if (orientation == DisplayState::eOrientationUnchanged) {
+            orientation = additionalRot;
+        } else {
+            orientation += additionalRot;
+            orientation %= 4;
+        }
+    }
+
     switch (orientation) {
     case DisplayState::eOrientationDefault:
         flags = Transform::ROT_0;
@@ -402,6 +441,11 @@ status_t DisplayDevice::orientationToTransfrom(
     default:
         return BAD_VALUE;
     }
+
+    if (DISPLAY_PRIMARY == mHwcDisplayId && isPanelInverseMounted()) {
+        flags = flags ^ Transform::ROT_180;
+    }
+
     tr->set(flags, w, h);
     return NO_ERROR;
 }
@@ -441,7 +485,15 @@ void DisplayDevice::setProjection(int orientation,
     if (!frame.isValid()) {
         // the destination frame can be invalid if it has never been set,
         // in that case we assume the whole display frame.
-        frame = Rect(w, h);
+        char value[PROPERTY_VALUE_MAX];
+        property_get("ro.sf.hwrotation", value, "0");
+        int additionalRot = atoi(value);
+
+        if (additionalRot == 90 || additionalRot == 270) {
+            frame = Rect(h, w);
+        } else {
+            frame = Rect(w, h);
+        }
     }
 
     if (viewport.isEmpty()) {

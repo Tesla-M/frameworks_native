@@ -34,8 +34,8 @@ LOCAL_SRC_FILES := \
     RenderEngine/Texture.cpp \
     RenderEngine/GLES10RenderEngine.cpp \
     RenderEngine/GLES11RenderEngine.cpp \
-    RenderEngine/GLES20RenderEngine.cpp
-
+    RenderEngine/GLES20RenderEngine.cpp \
+    DisplayUtils.cpp
 
 LOCAL_CFLAGS := -DLOG_TAG=\"SurfaceFlinger\"
 LOCAL_CFLAGS += -DGL_GLEXT_PROTOTYPES -DEGL_EGLEXT_PROTOTYPES
@@ -45,6 +45,10 @@ ifeq ($(TARGET_BOARD_PLATFORM),omap4)
 endif
 ifeq ($(TARGET_BOARD_PLATFORM),s5pc110)
     LOCAL_CFLAGS += -DHAS_CONTEXT_PRIORITY
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),exynos4)
+	LOCAL_CFLAGS += -DSWAP_BUFFERS_WORKAROUND -DEXYNOS4_HWC_1_1
 endif
 
 ifeq ($(TARGET_DISABLE_TRIPLE_BUFFERING),true)
@@ -105,6 +109,25 @@ LOCAL_SHARED_LIBRARIES := \
     libui \
     libgui \
     libpowermanager
+
+ifeq ($(TARGET_USES_QCOM_BSP), true)
+    LOCAL_SRC_FILES += \
+        ExSurfaceFlinger/ExLayer.cpp \
+        ExSurfaceFlinger/ExSurfaceFlinger.cpp \
+        ExSurfaceFlinger/ExVirtualDisplaySurface.cpp \
+        ExSurfaceFlinger/ExHWComposer.cpp
+    LOCAL_C_INCLUDES += $(call project-path-for,qcom-display)/libgralloc
+    LOCAL_C_INCLUDES += $(call project-path-for,qcom-display)/libqdutils
+    LOCAL_SHARED_LIBRARIES += libqdutils
+    LOCAL_CFLAGS += -DQTI_BSP
+endif
+
+ifeq ($(BOARD_USES_SAMSUNG_HDMI),true)
+        LOCAL_CFLAGS += -DSAMSUNG_HDMI_SUPPORT
+        LOCAL_SHARED_LIBRARIES += libTVOut libhdmiclient
+        LOCAL_C_INCLUDES += hardware/samsung/$(TARGET_BOARD_PLATFORM)/hal/libhdmi/libhdmiservice
+        LOCAL_C_INCLUDES += hardware/samsung/$(TARGET_BOARD_PLATFORM)/hal/include
+endif
 
 LOCAL_MODULE := libsurfaceflinger
 

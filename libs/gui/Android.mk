@@ -65,6 +65,7 @@ LOCAL_SRC_FILES := \
 	Sensor.cpp \
 	SensorEventQueue.cpp \
 	SensorManager.cpp \
+	SensorManagerCompat.cpp \
 	StreamSplitter.cpp \
 	Surface.cpp \
 	SurfaceControl.cpp \
@@ -89,6 +90,10 @@ ifeq ($(TARGET_BOARD_PLATFORM), tegra)
 endif
 ifeq ($(TARGET_BOARD_PLATFORM), tegra3)
 	LOCAL_CFLAGS += -DDONT_USE_FENCE_SYNC
+endif
+
+ifeq ($(TARGET_NO_SENSOR_PERMISSION_CHECK),true)
+LOCAL_CPPFLAGS += -DNO_SENSOR_PERMISSION_CHECK
 endif
 
 include $(BUILD_SHARED_LIBRARY)

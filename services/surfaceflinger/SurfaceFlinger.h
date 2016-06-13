@@ -56,6 +56,10 @@
 #include "DisplayHardware/HWComposer.h"
 #include "Effects/Daltonizer.h"
 
+#ifdef SAMSUNG_HDMI_SUPPORT
+#include "SecHdmiClient.h"
+#endif
+
 namespace android {
 
 // ---------------------------------------------------------------------------
@@ -84,6 +88,10 @@ class SurfaceFlinger : public BnSurfaceComposer,
                        private HWComposer::EventHandler
 {
 public:
+#ifdef QTI_BSP
+    friend class ExSurfaceFlinger;
+#endif
+
     static char const* getServiceName() ANDROID_API {
         return "SurfaceFlinger";
     }
@@ -138,6 +146,7 @@ private:
     friend class Client;
     friend class DisplayEventConnection;
     friend class Layer;
+    friend class LayerDim;
     friend class MonitoredProducer;
 
     // This value is specified in number of frames.  Log frame stats at most
@@ -207,7 +216,8 @@ private:
             const sp<IGraphicBufferProducer>& producer,
             Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
             uint32_t minLayerZ, uint32_t maxLayerZ,
-            bool useIdentityTransform, ISurfaceComposer::Rotation rotation);
+            bool useIdentityTransform, ISurfaceComposer::Rotation rotation,
+            bool isCpuConsumer);
     virtual status_t getDisplayStats(const sp<IBinder>& display,
             DisplayStatInfo* stats);
     virtual status_t getDisplayConfigs(const sp<IBinder>& display,
@@ -234,6 +244,43 @@ private:
     virtual void onVSyncReceived(int type, nsecs_t timestamp);
     virtual void onHotplugReceived(int disp, bool connected);
 
+    /* ------------------------------------------------------------------------
+     * Extensions
+     */
+    virtual void updateExtendedMode() { }
+
+    virtual void getIndexLOI(size_t /*dpy*/,
+                     const LayerVector& /*currentLayers*/,
+                     bool& /*bIgnoreLayers*/,
+                     int& /*indexLOI*/) { }
+
+    virtual bool updateLayerVisibleNonTransparentRegion(
+                     const int& dpy, const sp<Layer>& layer,
+                     bool& bIgnoreLayers, int& indexLOI,
+                     uint32_t layerStack, const int& i);
+
+    virtual void delayDPTransactionIfNeeded(
+                     const Vector<DisplayState>& /*displays*/) { }
+
+    virtual bool canDrawLayerinScreenShot(
+                     const sp<const DisplayDevice>& hw,
+                     const sp<Layer>& layer);
+
+    virtual void isfreezeSurfacePresent(
+                     bool& freezeSurfacePresent,
+                     const sp<const DisplayDevice>& /*hw*/,
+                     const int32_t& /*id*/) { freezeSurfacePresent = false; }
+
+    virtual void setOrientationEventControl(
+                     bool& /*freezeSurfacePresent*/,
+                     const int32_t& /*id*/) { }
+
+    virtual void updateVisibleRegionsDirty() { }
+
+    virtual void  drawWormHoleIfRequired(HWComposer::LayerListIterator &cur,
+        const HWComposer::LayerListIterator &end,
+        const sp<const DisplayDevice>& hw,
+        const Region& region);
     /* ------------------------------------------------------------------------
      * Message handling
      */
@@ -329,7 +376,8 @@ private:
             const sp<IGraphicBufferProducer>& producer,
             Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
             uint32_t minLayerZ, uint32_t maxLayerZ,
-            bool useIdentityTransform, Transform::orientation_flags rotation);
+            bool useIdentityTransform, Transform::orientation_flags rotation,
+            bool useReadPixels);
 
     /* ------------------------------------------------------------------------
      * EGL
@@ -373,7 +421,7 @@ private:
      * Compositing
      */
     void invalidateHwcGeometry();
-    static void computeVisibleRegions(
+    void computeVisibleRegions(size_t dpy,
             const LayerVector& currentLayers, uint32_t layerStack,
             Region& dirtyRegion, Region& opaqueRegion);
 
@@ -506,6 +554,9 @@ private:
     nsecs_t mFrameBuckets[NUM_BUCKETS];
     nsecs_t mTotalTime;
     nsecs_t mLastSwapTime;
+#if defined(SAMSUNG_HDMI_SUPPORT) && defined(SAMSUNG_EXYNOS5250)
+    SecHdmiClient *                         mHdmiClient;
+#endif
 };
 
 }; // namespace android
